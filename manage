@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+build() {
+	odin build src/ -o:speed -out:bin/odwm
+}
+
+install() {
+	sudo cp ./bin/odwm /usr/local/bin/odwm
+}
+
+case "$1" in
+	build)
+		build
+	;;
+	install)
+		build
+		install
+	;;
+	*)
+		printf "%s\n%s\n%s\n\n" \
+			"Usage:" \
+			"manage build   -- builds the program" \
+			"manage install -- builds and installs the program"
+	;;
+esac
+
+
+
+
