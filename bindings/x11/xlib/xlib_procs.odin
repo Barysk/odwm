@@ -1119,8 +1119,11 @@ foreign xlib {
 		) -> i32 ---
 	// Error handling
 	SetErrorHandler :: proc(
-		handler: #type proc "c" (display: ^Display, event: ^XErrorEvent) -> i32,
-		) -> i32 ---
+		handler: proc "c" (display: ^Display, event: ^XErrorEvent) -> i32,
+		) -> proc "c" (^Display, ^XErrorEvent) -> i32 ---
+	// SetErrorHandler :: proc(
+	// 	handler: #type proc "c" (display: ^Display, event: ^XErrorEvent) -> i32,
+	// 	) -> i32 ---
 	GetErrorText :: proc(
 		display: ^Display,
 		code: i32,

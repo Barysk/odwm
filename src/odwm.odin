@@ -8,13 +8,14 @@ WM_NAME      :: "odwm"
 VERSION      :: "0.1inf"
 NEXT_WINDOW  :: "NEXT_WINDOW"
 PREV_WINDOW  :: "PREVIOUS_WINDOW"
-EXIT_FAILURE :: 0
-EXIT_SUCCESS :: 1
+// EXIT_FAILURE :: 0
+// EXIT_SUCCESS :: 1
 
 /////////////
 // IMPORTS //
 /////////////
 
+import      "base:runtime"
 import x    "../bindings/x11/xlib"
 import c    "core:c"
 import libc "core:c/libc"
@@ -26,7 +27,9 @@ import fmt  "core:fmt"
 ///////////////
 
 dpy        : ^x.Display
-xerrorxlib : proc "c" (d: ^x.Display, e: ^x.XErrorEvent) -> i32;
+// xerrorxlib : proc "c" (d: ^x.Display, e: ^x.XErrorEvent) -> i32;
+xerrorxlib : proc "c" (^x.Display, ^x.XErrorEvent) -> i32 = nil;
+
 
 
 ///////////
@@ -38,7 +41,7 @@ die :: proc(msg: string) {
 	os.exit(1)
 }
 
-main :: proc () -> i32 {
+main :: proc () {
 	args := os.args
 
 	if len(args) == 2 && args[1] == "-v" {
@@ -54,10 +57,12 @@ main :: proc () -> i32 {
 		die(WM_NAME + ": cannot open display")
 	}
 
-	// checkotherwm()
-	
+	checkotherwm() // DONE
+	// setup()
+	// scan()
+	// run()
+	// cleanup()
 	x.CloseDisplay(dpy)
-	return EXIT_SUCCESS
 }
 // [[ 1 ]] -- added binding for SupportsLocale
 // @(default_calling_convention="c", link_prefix="X")
@@ -69,16 +74,37 @@ main :: proc () -> i32 {
 // 	CloseDisplay      :: proc(display: ^Display) ---
 // +	SupportsLocale    :: proc() -> bool ---
 
-// checkotherwm :: proc () {
-// 	xerrorxlib = x.SetErrorHandler(xerrorstart)
-// 	//...
-//
-// }
-//
-// xerrorstart :: proc "c" (dpy: ^x.Display, ee: ^x.XErrorEvent) -> i32 {
-// 	die(WM_NAME + ": another window manager is already running")
-// 	return -1
-// }
+checkotherwm :: proc () {
+	xerrorxlib = x.SetErrorHandler(xerrorstart)
+	// this causes an error if some other wm is running
+	x.SelectInput(dpy, x.DefaultRootWindow(dpy), { .SubstructureRedirect })
+	x.Sync(dpy, false)
+	x.SetErrorHandler(xerror)
+	x.Sync(dpy, false)
+}
+
+xerror :: proc "c" (dpy: ^x.Display, ee: ^x.XErrorEvent) -> i32 {
+	context = runtime.default_context()
+	if (ee.error_code   == u8(x.Status.BadWindow) \
+	|| (ee.request_code == u8(x.RequesCodes.X_SetInputFocus)     && ee.error_code == u8(x.Status.BadMatch))     \
+	|| (ee.request_code == u8(x.RequesCodes.X_PolyText8)         && ee.error_code == u8(x.Status.BadDrawable))  \
+	|| (ee.request_code == u8(x.RequesCodes.X_PolyFillRectangle) && ee.error_code == u8(x.Status.BadDrawable))  \
+	|| (ee.request_code == u8(x.RequesCodes.X_PolySegment)       && ee.error_code == u8(x.Status.BadDrawable))  \
+	|| (ee.request_code == u8(x.RequesCodes.X_ConfigureWindow)   && ee.error_code == u8(x.Status.BadMatch))     \
+	|| (ee.request_code == u8(x.RequesCodes.X_GrabButton)        && ee.error_code == u8(x.Status.BadAccess))    \
+	|| (ee.request_code == u8(x.RequesCodes.X_GrabKey)           && ee.error_code == u8(x.Status.BadAccess))    \
+	|| (ee.request_code == u8(x.RequesCodes.X_CopyArea)          && ee.error_code == u8(x.Status.BadDrawable))) {
+		return 0
+	}
+	fmt.eprintfln("%s: fatal error: request code=%d, error code=%d", WM_NAME, ee.request_code, ee.error_code)
+	return xerrorxlib(dpy, ee)
+}
+
+xerrorstart :: proc "c" (dpy: ^x.Display, ee: ^x.XErrorEvent) -> i32 {
+	context = runtime.default_context()
+	die(WM_NAME + ": another window manager is already running")
+	return -1
+}
 
 
 
