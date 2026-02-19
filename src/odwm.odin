@@ -15,11 +15,11 @@ EXIT_SUCCESS :: 1
 // IMPORTS //
 /////////////
 
-import x   "vendor:x11/xlib"
-import c   "core:c/libc"
-import os  "core:os"
-import fmt "core:fmt"
-import log "core:log"
+import x    "../bindings/x11/xlib"
+import c    "core:c"
+import libc "core:c/libc"
+import os   "core:os"
+import fmt  "core:fmt"
 
 ///////////////
 // VARIABLES //
@@ -46,7 +46,7 @@ main :: proc () -> i32 {
 	} else if len(args) != 1 {
 		die("usage: " + WM_NAME + " [-v]")
 	}
-	if c.setlocale(.CTYPE, "") == nil || !x.SupportsLocale() {
+	if libc.setlocale(.CTYPE, "") == nil || !x.SupportsLocale() {
 		fmt.eprintln("warning: no locale support")
 	}
 	dpy = x.OpenDisplay(nil)
