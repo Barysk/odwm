@@ -17,7 +17,8 @@ PREV_WINDOW  :: "PREVIOUS_WINDOW"
 
 import      "base:runtime"
 import x    "../bindings/x11/xlib"
-import c    "core:c"
+import psx  "../bindings/posix"
+import c     "core:c"
 import libc "core:c/libc"
 import os   "core:os"
 import fmt  "core:fmt"
@@ -27,8 +28,13 @@ import fmt  "core:fmt"
 ///////////////
 
 dpy        : ^x.Display
-// xerrorxlib : proc "c" (d: ^x.Display, e: ^x.XErrorEvent) -> i32;
 xerrorxlib : proc "c" (^x.Display, ^x.XErrorEvent) -> i32 = nil;
+screen     : i32
+sw, sh     : i32 /* screen geometry */
+bh         : i32 /* bar height */
+drw        : ^Drw
+root       : x.Window
+wmcheckwin : x.Window
 
 
 
@@ -49,7 +55,7 @@ main :: proc () {
 	} else if len(args) != 1 {
 		die("usage: " + WM_NAME + " [-v]")
 	}
-	if libc.setlocale(.CTYPE, "") == nil || !x.SupportsLocale() {
+	if libc.setlocale(.CTYPE, "") == nil || !x.SupportsLocale() {   // FIXME: possible weak spot
 		fmt.eprintln("warning: no locale support")
 	}
 	dpy = x.OpenDisplay(nil)
@@ -58,7 +64,7 @@ main :: proc () {
 	}
 
 	checkotherwm() // DONE
-	// setup()
+	setup()
 	// scan()
 	// run()
 	// cleanup()
@@ -81,6 +87,30 @@ checkotherwm :: proc () {
 	x.Sync(dpy, false)
 	x.SetErrorHandler(xerror)
 	x.Sync(dpy, false)
+}
+
+setup :: proc () {
+	i          : i32
+	wa         : x.XSetWindowAttributes
+	utf8string : x.Atom
+	sa         : psx.sigaction_t
+
+	/* do not transform children into zombies when they terminate */
+	psx.sigemptyset(&sa.sa_mask)
+	sa.sa_flags = psx.SA_Flags{.NOCLDSTOP, .NOCLDWAIT, .SA_NODEFER}
+	sa.sa_handler = cast(proc "c" (psx.Signal)) psx.SIG_IGN        // FIXME: possible weak spot
+	psx.sigaction(psx.Signal(psx.SIGCHLD), &sa, nil)
+
+	/* clean up any zombies (ingerited from .xinitrc etc) immediately */
+	for psx.waitpid(-1, nil, psx.Wait_Flags{.NOHANG}) > 0 {}
+
+	/* init screen */
+	screen = x.DefaultScreen(dpy)
+	sw     = x.DisplayWidth(dpy, screen)
+	sh     = x.DisplayHeight(dpy, screen)
+	root   = x.RootWindow(dpy, screen)
+	// TODO: complete drw bindings
+
 }
 
 xerror :: proc "c" (dpy: ^x.Display, ee: ^x.XErrorEvent) -> i32 {
