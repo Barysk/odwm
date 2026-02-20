@@ -15,7 +15,7 @@ PREV_WINDOW  :: "PREVIOUS_WINDOW"
 // IMPORTS //
 /////////////
 
-import      "base:runtime"
+import rt   "base:runtime"
 import x    "../bindings/x11/xlib"
 import psx  "../bindings/posix"
 import c     "core:c"
@@ -42,10 +42,10 @@ wmcheckwin : x.Window
 // LOGIC //
 ///////////
 
-die :: proc(msg: string) {
-	fmt.eprintln(msg)
-	os.exit(1)
-}
+// die :: proc(msg: string) {
+// 	fmt.eprintln(msg)
+// 	os.exit(1)
+// }
 
 main :: proc () {
 	args := os.args
@@ -114,7 +114,7 @@ setup :: proc () {
 }
 
 xerror :: proc "c" (dpy: ^x.Display, ee: ^x.XErrorEvent) -> i32 {
-	context = runtime.default_context()
+	context = rt.default_context()
 	if (ee.error_code   == u8(x.Status.BadWindow) \
 	|| (ee.request_code == u8(x.RequesCodes.X_SetInputFocus)     && ee.error_code == u8(x.Status.BadMatch))     \
 	|| (ee.request_code == u8(x.RequesCodes.X_PolyText8)         && ee.error_code == u8(x.Status.BadDrawable))  \
@@ -131,7 +131,7 @@ xerror :: proc "c" (dpy: ^x.Display, ee: ^x.XErrorEvent) -> i32 {
 }
 
 xerrorstart :: proc "c" (dpy: ^x.Display, ee: ^x.XErrorEvent) -> i32 {
-	context = runtime.default_context()
+	context = rt.default_context()
 	die(WM_NAME + ": another window manager is already running")
 	return -1
 }
