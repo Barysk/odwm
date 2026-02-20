@@ -16,7 +16,7 @@ PREV_WINDOW  :: "PREVIOUS_WINDOW"
 /////////////
 
 import rt   "base:runtime"
-import x    "../bindings/x11/xlib"
+import xlib "../bindings/x11/xlib"
 import psx  "../bindings/posix"
 import c     "core:c"
 import libc "core:c/libc"
@@ -27,14 +27,14 @@ import fmt  "core:fmt"
 // VARIABLES //
 ///////////////
 
-dpy        : ^x.Display
-xerrorxlib : proc "c" (^x.Display, ^x.XErrorEvent) -> i32 = nil;
+dpy        : ^xlib.Display
+xerrorxlib : proc "c" (^xlib.Display, ^xlib.XErrorEvent) -> i32 = nil;
 screen     : i32
 sw, sh     : i32 /* screen geometry */
 bh         : i32 /* bar height */
 drw        : ^Drw
-root       : x.Window
-wmcheckwin : x.Window
+root       : xlib.Window
+wmcheckwin : xlib.Window
 
 
 
@@ -55,10 +55,10 @@ main :: proc () {
 	} else if len(args) != 1 {
 		die("usage: " + WM_NAME + " [-v]")
 	}
-	if libc.setlocale(.CTYPE, "") == nil || !x.SupportsLocale() {   // FIXME: possible weak spot
+	if libc.setlocale(.CTYPE, "") == nil || !xlib.SupportsLocale() {   // FIXME: possible weak spot
 		fmt.eprintln("warning: no locale support")
 	}
-	dpy = x.OpenDisplay(nil)
+	dpy = xlib.OpenDisplay(nil)
 	if dpy == nil {
 		die(WM_NAME + ": cannot open display")
 	}
@@ -68,7 +68,7 @@ main :: proc () {
 	// scan()
 	// run()
 	// cleanup()
-	x.CloseDisplay(dpy)
+	xlib.CloseDisplay(dpy)
 }
 // [[ 1 ]] -- added binding for SupportsLocale
 // @(default_calling_convention="c", link_prefix="X")
@@ -81,18 +81,18 @@ main :: proc () {
 // +	SupportsLocale    :: proc() -> bool ---
 
 checkotherwm :: proc () {
-	xerrorxlib = x.SetErrorHandler(xerrorstart)
+	xerrorxlib = xlib.SetErrorHandler(xerrorstart)
 	// this causes an error if some other wm is running
-	x.SelectInput(dpy, x.DefaultRootWindow(dpy), { .SubstructureRedirect })
-	x.Sync(dpy, false)
-	x.SetErrorHandler(xerror)
-	x.Sync(dpy, false)
+	xlib.SelectInput(dpy, xlib.DefaultRootWindow(dpy), { .SubstructureRedirect })
+	xlib.Sync(dpy, false)
+	xlib.SetErrorHandler(xerror)
+	xlib.Sync(dpy, false)
 }
 
 setup :: proc () {
 	i          : i32
-	wa         : x.XSetWindowAttributes
-	utf8string : x.Atom
+	wa         : xlib.XSetWindowAttributes
+	utf8string : xlib.Atom
 	sa         : psx.sigaction_t
 
 	/* do not transform children into zombies when they terminate */
@@ -105,10 +105,10 @@ setup :: proc () {
 	for psx.waitpid(-1, nil, psx.Wait_Flags{.NOHANG}) > 0 {}
 
 	/* init screen */
-	screen = x.DefaultScreen(dpy)
-	sw     = x.DisplayWidth(dpy, screen)
-	sh     = x.DisplayHeight(dpy, screen)
-	root   = x.RootWindow(dpy, screen)
+	screen = xlib.DefaultScreen(dpy)
+	sw     = xlib.DisplayWidth(dpy, screen)
+	sh     = xlib.DisplayHeight(dpy, screen)
+	root   = xlib.RootWindow(dpy, screen)
 	drw    = drw_create(dpy, screen, root, u32(sw), u32(sh))
 	if drw_fontset_create(drw, fonts, len(fonts)) == nil {
 		die("no fonts could be loaded")
@@ -118,24 +118,24 @@ setup :: proc () {
 
 }
 
-xerror :: proc "c" (dpy: ^x.Display, ee: ^x.XErrorEvent) -> i32 {
+xerror :: proc "c" (dpy: ^xlib.Display, ee: ^xlib.XErrorEvent) -> i32 {
 	context = rt.default_context()
-	if (ee.error_code   == u8(x.Status.BadWindow) \
-	|| (ee.request_code == u8(x.RequesCodes.X_SetInputFocus)     && ee.error_code == u8(x.Status.BadMatch))     \
-	|| (ee.request_code == u8(x.RequesCodes.X_PolyText8)         && ee.error_code == u8(x.Status.BadDrawable))  \
-	|| (ee.request_code == u8(x.RequesCodes.X_PolyFillRectangle) && ee.error_code == u8(x.Status.BadDrawable))  \
-	|| (ee.request_code == u8(x.RequesCodes.X_PolySegment)       && ee.error_code == u8(x.Status.BadDrawable))  \
-	|| (ee.request_code == u8(x.RequesCodes.X_ConfigureWindow)   && ee.error_code == u8(x.Status.BadMatch))     \
-	|| (ee.request_code == u8(x.RequesCodes.X_GrabButton)        && ee.error_code == u8(x.Status.BadAccess))    \
-	|| (ee.request_code == u8(x.RequesCodes.X_GrabKey)           && ee.error_code == u8(x.Status.BadAccess))    \
-	|| (ee.request_code == u8(x.RequesCodes.X_CopyArea)          && ee.error_code == u8(x.Status.BadDrawable))) {
+	if (ee.error_code   == u8(xlib.Status.BadWindow) \
+	|| (ee.request_code == u8(xlib.RequesCodes.X_SetInputFocus)     && ee.error_code == u8(xlib.Status.BadMatch))     \
+	|| (ee.request_code == u8(xlib.RequesCodes.X_PolyText8)         && ee.error_code == u8(xlib.Status.BadDrawable))  \
+	|| (ee.request_code == u8(xlib.RequesCodes.X_PolyFillRectangle) && ee.error_code == u8(xlib.Status.BadDrawable))  \
+	|| (ee.request_code == u8(xlib.RequesCodes.X_PolySegment)       && ee.error_code == u8(xlib.Status.BadDrawable))  \
+	|| (ee.request_code == u8(xlib.RequesCodes.X_ConfigureWindow)   && ee.error_code == u8(xlib.Status.BadMatch))     \
+	|| (ee.request_code == u8(xlib.RequesCodes.X_GrabButton)        && ee.error_code == u8(xlib.Status.BadAccess))    \
+	|| (ee.request_code == u8(xlib.RequesCodes.X_GrabKey)           && ee.error_code == u8(xlib.Status.BadAccess))    \
+	|| (ee.request_code == u8(xlib.RequesCodes.X_CopyArea)          && ee.error_code == u8(xlib.Status.BadDrawable))) {
 		return 0
 	}
 	fmt.eprintfln("%s: fatal error: request code=%d, error code=%d", WM_NAME, ee.request_code, ee.error_code)
 	return xerrorxlib(dpy, ee)
 }
 
-xerrorstart :: proc "c" (dpy: ^x.Display, ee: ^x.XErrorEvent) -> i32 {
+xerrorstart :: proc "c" (dpy: ^xlib.Display, ee: ^xlib.XErrorEvent) -> i32 {
 	context = rt.default_context()
 	die(WM_NAME + ": another window manager is already running")
 	return -1

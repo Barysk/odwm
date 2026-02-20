@@ -1,6 +1,6 @@
 package odwm
 
-import "core:fmt"
+import fmt  "core:fmt"
 import xlib "../bindings/x11/xlib"
 import x    "../bindings/x"
 import c    "core:c/libc"
