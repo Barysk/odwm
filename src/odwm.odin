@@ -27,15 +27,70 @@ import fmt  "core:fmt"
 // VARIABLES //
 ///////////////
 
-dpy        : ^xlib.Display
 xerrorxlib : proc "c" (^xlib.Display, ^xlib.XErrorEvent) -> i32 = nil;
 screen     : i32
 sw, sh     : i32 /* screen geometry */
 bh         : i32 /* bar height */
+lrpad      : i32
+dpy        : ^xlib.Display
 drw        : ^Drw
-root       : xlib.Window
-wmcheckwin : xlib.Window
+mons, selmon     : ^Monitor
+root, wmcheckwin : xlib.Window
 
+////////////
+// MACROS //
+////////////
+
+INTERSECT :: proc(x, y, w, h: i32, m: ^Monitor) -> i32 {
+	x_overlap := max(i32(0), min(x + w, m.wx + m.ww) - max(x, m.wx))
+	y_overlap := max(i32(0), min(y + h, m.wy + m.wh) - max(y, m.wy))
+	return x_overlap * y_overlap
+}
+
+/////////////
+// STRUCTS //
+/////////////
+
+Client :: struct {
+	name       : [256]c.char,
+	mina, maxa : f32,
+	x, y, w, h : i32,
+	oldx, oldy, oldw, oldh: i32,
+	basew, baseh, incw, inch, maxw, maxh, minw, minh, hintsvalid: i32,
+	bw, oldbw  : i32,
+	tags       : u32,
+	isfixed, isfloating, isurgent, neverfocus, oldstate, isfullscreen: i32,
+	next  : ^Client,
+	snext : ^Client,
+	mon   : ^Monitor,
+	win   : xlib.Window,
+}
+
+Layout :: struct {
+	symbol  : cstring,
+	arrange : proc(monitor: ^Monitor)
+}
+
+Monitor :: struct {
+	ltsymbol : [16]c.char,
+	mfact    : f32,
+	nmaster  : i32,
+	num      : i32,
+	by       : i32,
+	mx, my, mw, mh : i32,
+	wx, wy, ww, wh : i32,
+	seltags  : u32,
+	sellt    : u32,
+	tagset   : [2]u32,
+	showbar  : i32,
+	topbar   : i32,
+	clients  : ^Client,
+	sel      : ^Client,
+	stack    : ^Client,
+	next     : ^Monitor,
+	barwin   : ^xlib.Window,
+	lt       : ^[2]Layout,
+}
 
 
 ///////////
@@ -70,15 +125,6 @@ main :: proc () {
 	// cleanup()
 	xlib.CloseDisplay(dpy)
 }
-// [[ 1 ]] -- added binding for SupportsLocale
-// @(default_calling_convention="c", link_prefix="X")
-// foreign xlib {
-// 	// Free data allocated by Xlib
-// 	Free              :: proc(ptr: rawptr) ---
-// 	// Opening/closing a display
-// 	OpenDisplay       :: proc(name: cstring) -> ^Display ---
-// 	CloseDisplay      :: proc(display: ^Display) ---
-// +	SupportsLocale    :: proc() -> bool ---
 
 checkotherwm :: proc () {
 	xerrorxlib = xlib.SetErrorHandler(xerrorstart)
@@ -113,9 +159,121 @@ setup :: proc () {
 	if drw_fontset_create(drw, fonts, len(fonts)) == nil {
 		die("no fonts could be loaded")
 	}
+	lrpad = i32(drw.fonts.h)
+	bh = i32(drw.fonts.h) + 2
+	updategeom()
+	/* init atoms */
+	// TODO: ---
 
-	// TODO: complete drw bindings
+}
 
+updategeom :: proc () -> i32 {
+	dirty: i32 = 0
+	// TODO: XINERMA SUPPORT HERE, NOW OMITTED
+	{ /* Default monitor setup */
+		if mons == nil {
+			mons = createmon()
+		}
+		if mons.mw != sw || mons.mh != sh {
+			dirty = 1
+			mons.mw = sw
+			mons.ww = sw
+			mons.mh = sh
+			mons.wh = sh
+			updatebarpos(mons)
+		}
+	}
+	if dirty != 0 {
+		selmon = mons
+		selmon = wintomon(root)
+	}
+	return dirty
+}
+
+wintomon :: proc (w: xlib.Window) -> ^Monitor {
+	x, y : i32
+	c : ^Client
+	m : ^Monitor
+
+	if (w == root) && getrootptr(&x, &y) {
+		return recttomon(x, y, 1, 1)
+	}
+	for m = mons; m != nil; m = m.next {
+		if w == m.barwin^ {
+			return m
+		}
+	}
+	c = wintoclient(w)
+	if c != nil {
+		return c.mon
+	}
+	return selmon
+}
+
+wintoclient :: proc (w: xlib.Window) -> ^Client {
+	c: ^Client
+	m: ^Monitor
+
+	for m = mons; m != nil; m = m.next {
+		for c = m.clients; c != nil; c = c.next {
+			if (c.win == w) {
+				return c
+			}
+		}
+	}
+	return nil
+}
+
+recttomon :: proc (x, y, w, h: i32) -> ^Monitor {
+	m: ^Monitor
+	r: ^Monitor = selmon
+	a: i32
+	area: i32 = 0
+
+	for m = mons; m != nil; m = m.next {
+		a = INTERSECT(x, y, w, h, m)
+		if a > area {
+			area = a
+			r = m
+		}
+	}
+	return r
+}
+
+getrootptr :: proc (x, y: ^i32) -> b32 {
+	di: i32
+	dui: xlib.KeyMask
+	dummy: xlib.Window
+
+	return xlib.QueryPointer(dpy, root, &dummy, &dummy, x, y, &di, &di, &dui)
+}
+
+updatebarpos :: proc (m: ^Monitor) {
+	m.wy = m.my
+	m.wh = m.mh
+	if m.showbar != 0 {
+		m.wh -= bh
+		m.by = (m.topbar != 0) ? m.wy : m.wy + m.wh
+		m.wy = (m.topbar != 0) ? m.wy + bh : m.wy
+	} else {
+		m.by = -bh
+	}
+}
+
+createmon :: proc () -> ^Monitor {
+	m: ^Monitor
+
+	m = cast(^Monitor)ecalloc(1, size_of(Monitor))
+	m.tagset[0] = 1
+	m.tagset[1] = 1
+	m.mfact     = mfact
+	m.nmaster   = nmaster
+	m.showbar   = showbar
+	m.topbar    = topbar
+	m.lt[0]     = layouts[0]
+	m.lt[1]     = layouts[1 % len(layouts)]
+
+	return m
 }
 
 xerror :: proc "c" (dpy: ^xlib.Display, ee: ^xlib.XErrorEvent) -> i32 {
@@ -142,6 +300,9 @@ xerrorstart :: proc "c" (dpy: ^xlib.Display, ee: ^xlib.XErrorEvent) -> i32 {
 }
 
 
+tile_proc :: proc(m: ^Monitor) { }
+
+monocle_proc :: proc(m: ^Monitor) { }
 
 ////////////////////////
 // TEMPLATE TERRITORY //
