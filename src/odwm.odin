@@ -109,6 +109,11 @@ setup :: proc () {
 	sw     = x.DisplayWidth(dpy, screen)
 	sh     = x.DisplayHeight(dpy, screen)
 	root   = x.RootWindow(dpy, screen)
+	drw    = drw_create(dpy, screen, root, u32(sw), u32(sh))
+	if drw_fontset_create(drw, fonts, len(fonts)) == nil {
+		die("no fonts could be loaded")
+	}
+
 	// TODO: complete drw bindings
 
 }
