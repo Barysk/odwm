@@ -5,6 +5,8 @@ package x
 import "core:c"
 import "../../bindings/x11/xlib"
 
+/* Xft */
+
 XftFont :: struct {
 	ascent  : i32,
 	descent : i32,
@@ -32,16 +34,18 @@ FcPattern :: distinct rawptr
 foreign import xft "system:Xft"
 @(default_calling_convention="c")
 foreign xft {
-	XftFontOpenName    :: proc (display: ^xlib.Display, screen: i32, name: ^cstring) -> ^XftFont ---
+	XftFontOpenName    :: proc (display: ^xlib.Display, screen: i32, name: cstring)  -> ^XftFont ---
 	XftFontOpenPattern :: proc (display: ^xlib.Display, pattern: ^FcPattern)         -> ^XftFont ---
 	XftFontClose       :: proc (display: ^xlib.Display, pub: ^XftFont)                           ---
+	XftColorAllocName  :: proc (display: ^xlib.Display, visual: ^xlib.Visual, cmap: xlib.Colormap, name: cstring, result: ^XftColor) -> b32 ---
 }
+
+/* fontconfig */
 
 FcChar8  :: distinct c.uchar
 FcChar16 :: distinct c.ushort
 FcChar32 :: distinct c.uint
 FcBool   :: distinct c.int
-
 
 foreign import fc  "system:fontconfig"
 @(default_calling_convention="c")

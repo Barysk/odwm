@@ -23,6 +23,21 @@ import libc "core:c/libc"
 import os   "core:os"
 import fmt  "core:fmt"
 
+///////////
+// ENUMS //
+///////////
+
+EnCur :: enum { Normal, Resize, Move, Last } /* cursor */
+EnScheme :: enum { Norm, Sel } /* color schemes */
+EnNet :: enum {
+	Supported, WMName, WMState, WMCheck,
+	WMFullscreen, ActiveWindow, WMWindowType,
+	WMWindowTypeDialog, ClientList, Last } /* EWMH atoms */
+EnWM :: enum { Protocols, Delete, State, TakeFocus, Last } /* default atoms */
+EnClk :: enum {
+	TagBar, LtSymbol, StatusText, WinTitle,
+	ClientWin, RootWin, Last } /* clicks */
+
 ///////////////
 // VARIABLES //
 ///////////////
@@ -32,6 +47,11 @@ screen     : i32
 sw, sh     : i32 /* screen geometry */
 bh         : i32 /* bar height */
 lrpad      : i32
+wmatom     : [EnWM.Last]xlib.Atom
+netatom    : [EnNet.Last]xlib.Atom
+running    : i32
+cursor     : ^[EnCur.Last]Cur
+scheme     : [][]Clr
 dpy        : ^xlib.Display
 drw        : ^Drw
 mons, selmon     : ^Monitor
@@ -163,7 +183,30 @@ setup :: proc () {
 	bh = i32(drw.fonts.h) + 2
 	updategeom()
 	/* init atoms */
-	// TODO: ---
+	utf8string = xlib.InternAtom(dpy, "UTF8_STRING", false)
+	wmatom[EnWM.Protocols] = xlib.InternAtom(dpy, "WN_PROTOCOLS", false)
+	wmatom[EnWM.Delete] = xlib.InternAtom(dpy, "WM_DELETE_WINDOW", false)
+	wmatom[EnWM.State] = xlib.InternAtom(dpy, "WM_STATE", false)
+	wmatom[EnWM.TakeFocus] = xlib.InternAtom(dpy, "WM_TAKE_FOCUS", false)
+	netatom[EnNet.ActiveWindow] = xlib.InternAtom(dpy, "_NET_ACTIVE_WINDOW", false)
+	netatom[EnNet.Supported] = xlib.InternAtom(dpy, "_NET_SUPPORTED", false)
+	netatom[EnNet.WMName] = xlib.InternAtom(dpy, "_NET_WM_NAME", false)
+	netatom[EnNet.WMState] = xlib.InternAtom(dpy, "_NET_WM_STATE", false)
+	netatom[EnNet.WMCheck] = xlib.InternAtom(dpy, "_NET_SUPPORTING_WM_CHECK", false)
+	netatom[EnNet.WMFullscreen] = xlib.InternAtom(dpy, "_NET_WM_STATE_FULLSCREEN", false)
+	netatom[EnNet.WMWindowType] = xlib.InternAtom(dpy, "_NET_WM_WINDOW_TYPE", false)
+	netatom[EnNet.WMWindowTypeDialog] = xlib.InternAtom(dpy, "_NET_WM_WINDOW_TYPE_DIALOG", false)
+	netatom[EnNet.ClientList] = xlib.InternAtom(dpy, "_NET_CLIENT_LIST", false)
+	/* init cursors */
+	cursor[EnCur.Normal] = drw_cur_create(drw, xlib.CursorShape.XC_left_ptr)^  // FIXME: not sure why dereference there is required
+	cursor[EnCur.Resize] = drw_cur_create(drw, xlib.CursorShape.XC_sizing)^
+	cursor[EnCur.Move]   = drw_cur_create(drw, xlib.CursorShape.XC_fleur)^
+	/* init appearance */
+	// scheme = ecalloc(len(colors), size_of(^Clr))
+	scheme = make([][]Clr, len(colors))
+	for color, i in colors {
+		scheme[i] = drw_scm_create(drw, color, 3) }
+
 
 }
 
@@ -262,6 +305,7 @@ updatebarpos :: proc (m: ^Monitor) {
 
 createmon :: proc () -> ^Monitor {
 	m: ^Monitor
+	l:= layouts
 
 	m = cast(^Monitor)ecalloc(1, size_of(Monitor))
 	m.tagset[0] = 1
@@ -270,8 +314,8 @@ createmon :: proc () -> ^Monitor {
 	m.nmaster   = nmaster
 	m.showbar   = showbar
 	m.topbar    = topbar
-	m.lt[0]     = layouts[0]
-	m.lt[1]     = layouts[1 % len(layouts)]
+	m.lt[0]     = l[0]
+	m.lt[1]     = l[1 % len(l)]
 
 	return m
 }
